@@ -1,0 +1,5 @@
+every_minute:
+  sql: SELECT date_trunc('minute', now());
+
+every_hour:
+  sql: SELECT date_trunc('hour', now());

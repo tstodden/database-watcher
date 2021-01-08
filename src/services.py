@@ -1,11 +1,9 @@
 import psycopg2
+import yaml
+import datetime
 
-from .core import Watcher, QueryContent
-
-HOST = "localhost"
-DATABASE = "tyler"
-USER = "tester"
-PASSWORD = "tester"
+from .core import Watcher, QueryContent, WatcherValueChangedEvent
+from .constants import *
 
 
 class WatcherController:
@@ -33,17 +31,37 @@ class WatcherController:
 
     def initializeWatchers(self) -> [Watcher]:
         watchers = []
-        watchers.append(Watcher(self.executeSqlStatement(
-            "SELECT date_trunc('minute', now());")))
+        config = self.getWatchersConfig()
+        for watcherName in config:
+            watchers.append(self.createWatcherFromConfig(
+                watcherName, config[watcherName]))
         return watchers
 
-    # TODO: cleanup
-    def checkWatchers(self):
+    def createWatcherFromConfig(self, name: str, properties: dict) -> Watcher:
+        queryContent = self.executeSqlStatement(properties["sql"])
+        return Watcher(
+            name=name,
+            properties=properties,
+            queryContent=queryContent)
+
+    def getWatchersConfig(self) -> dict:
+        with open(WATCHER_CONFIG_FILEPATH) as configFile:
+            config = yaml.safe_load(configFile)
+        return config
+
+    def executeWatcherEvents(self):
+        for event in self.checkWatchers():
+            print(f"Watcher '{event.watcherName}' was triggered at {datetime.datetime.now()}")
+
+    def checkWatchers(self) -> [WatcherValueChangedEvent]:
+        watcherEvents = []
         for watch in self._watchers:
-            queryContent = self.executeSqlStatement(watch.sqlStatement)
-            if watch.checkWatchedValue(queryContent):
-                print(
-                    f"An event was triggered with statement: {watch.sqlStatement} resulting in hash: {watch._watchedValue}")
+            watcherEvents.append(self.checkIndividualWatcher(watch))
+        return filter(None, watcherEvents)
+
+    def checkIndividualWatcher(self, watcher: Watcher) -> WatcherValueChangedEvent:
+        queryContent = self.executeSqlStatement(watcher.sqlStatement)
+        return watcher.checkWatchedValue(queryContent)
 
 
 class ApplicationService:
@@ -77,4 +95,4 @@ class ApplicationService:
         return controller
 
     def triggerWatcherCheck(self):
-        self._watcherController.checkWatchers()
+        self._watcherController.executeWatcherEvents()

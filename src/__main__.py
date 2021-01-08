@@ -6,4 +6,4 @@ from .core import Watcher
 with ApplicationService() as service:
     while(True):
         service.triggerWatcherCheck()
-        time.sleep(5)
+        time.sleep(1)

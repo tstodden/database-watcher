@@ -1,0 +1,5 @@
+HOST = "localhost"
+DATABASE = "tyler"
+USER = "tester"
+PASSWORD = "tester"
+WATCHER_CONFIG_FILEPATH = "watchers.yml"
