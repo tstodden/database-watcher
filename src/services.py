@@ -12,56 +12,57 @@ class WatcherController:
 
     def __init__(self, connection: psycopg2.extensions.connection):
         self._dbConn = connection
-        self._watchers = self.initializeWatchers()
+        self._watchers = self._initializeWatchers()
 
     def executeSqlStatement(self, statement: str) -> QueryContent:
-        cursor = self.openCursor()
+        cursor = self._openCursor()
         cursor.execute(statement)
         result = cursor.fetchone()
-        self.commitTransactionAndCloseCursor(cursor)
+        self._commitTransactionAndCloseCursor(cursor)
         return QueryContent(statement, result)
 
-    def openCursor(self) -> psycopg2.extensions.cursor:
+    def executeWatcherEvents(self):
+        for event in self._checkWatchers():
+            print(
+                f"Watcher '{event.watcherName}' was triggered at {datetime.datetime.now()}")
+
+    def _checkWatchers(self) -> [WatcherValueChangedEvent]:
+        watcherEvents = []
+        for watch in self._watchers:
+            watcherEvents.append(self._checkIndividualWatcher(watch))
+        return filter(None, watcherEvents)
+
+    def _checkIndividualWatcher(self, watcher: Watcher) -> WatcherValueChangedEvent:
+        queryContent = self.executeSqlStatement(watcher.sqlStatement)
+        return watcher.checkWatchedValue(queryContent)
+
+    def _openCursor(self) -> psycopg2.extensions.cursor:
         cursor = self._dbConn.cursor()
         return cursor
 
-    def commitTransactionAndCloseCursor(self, cursor: psycopg2.extensions.cursor):
+    def _commitTransactionAndCloseCursor(self, cursor: psycopg2.extensions.cursor):
         self._dbConn.commit()
         cursor.close()
 
-    def initializeWatchers(self) -> [Watcher]:
+    def _initializeWatchers(self) -> [Watcher]:
         watchers = []
-        config = self.getWatchersConfig()
+        config = self._getWatchersConfig()
         for watcherName in config:
-            watchers.append(self.createWatcherFromConfig(
+            watchers.append(self._createWatcherFromConfig(
                 watcherName, config[watcherName]))
         return watchers
 
-    def createWatcherFromConfig(self, name: str, properties: dict) -> Watcher:
+    def _getWatchersConfig(self) -> dict:
+        with open(WATCHER_CONFIG_FILEPATH) as configFile:
+            config = yaml.safe_load(configFile)
+        return config
+
+    def _createWatcherFromConfig(self, name: str, properties: dict) -> Watcher:
         queryContent = self.executeSqlStatement(properties["sql"])
         return Watcher(
             name=name,
             properties=properties,
             queryContent=queryContent)
-
-    def getWatchersConfig(self) -> dict:
-        with open(WATCHER_CONFIG_FILEPATH) as configFile:
-            config = yaml.safe_load(configFile)
-        return config
-
-    def executeWatcherEvents(self):
-        for event in self.checkWatchers():
-            print(f"Watcher '{event.watcherName}' was triggered at {datetime.datetime.now()}")
-
-    def checkWatchers(self) -> [WatcherValueChangedEvent]:
-        watcherEvents = []
-        for watch in self._watchers:
-            watcherEvents.append(self.checkIndividualWatcher(watch))
-        return filter(None, watcherEvents)
-
-    def checkIndividualWatcher(self, watcher: Watcher) -> WatcherValueChangedEvent:
-        queryContent = self.executeSqlStatement(watcher.sqlStatement)
-        return watcher.checkWatchedValue(queryContent)
 
 
 class ApplicationService:
@@ -69,16 +70,23 @@ class ApplicationService:
     _watcherController: WatcherController
 
     def __init__(self):
-        self._dbConn = self.openDBConnection()
-        self._watcherController = self.initializeWatcherController()
+        self._dbConn = self._openDBConnection()
+        self._watcherController = self._initializeWatcherController()
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.closeDBConnection()
+        self._closeDBConnection()
 
-    def openDBConnection(self) -> psycopg2.extensions.connection:
+    def triggerWatcherCheck(self):
+        self._watcherController.executeWatcherEvents()
+
+    def _initializeWatcherController(self) -> WatcherController:
+        controller = WatcherController(self._dbConn)
+        return controller
+
+    def _openDBConnection(self) -> psycopg2.extensions.connection:
         connection = psycopg2.connect(
             host=HOST,
             dbname=DATABASE,
@@ -87,12 +95,5 @@ class ApplicationService:
         )
         return connection
 
-    def closeDBConnection(self):
+    def _closeDBConnection(self):
         self._dbConn.close()
-
-    def initializeWatcherController(self) -> WatcherController:
-        controller = WatcherController(self._dbConn)
-        return controller
-
-    def triggerWatcherCheck(self):
-        self._watcherController.executeWatcherEvents()
