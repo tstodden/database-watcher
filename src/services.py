@@ -1,17 +1,27 @@
 import psycopg2
 import yaml
 import datetime
+import logging
 
 from .core import Watcher, QueryContent, WatcherValueChangedEvent
 from .constants import *
 
 
+class EventDispatcher:
+    def dispatch(self, event):
+        if type(event) == WatcherValueChangedEvent:
+            logging.info(f"'{event.watcherName}' was triggered")
+        else:
+            raise NotImplementedError
+
+
 class WatcherController:
-    _dbConn: psycopg2.extensions.connection
+    _database: psycopg2.extensions.connection
+    _eventDispatcher = EventDispatcher()
     _watchers: [Watcher]
 
     def __init__(self, connection: psycopg2.extensions.connection):
-        self._dbConn = connection
+        self._database = connection
         self._watchers = self._initializeWatchers()
 
     def executeSqlStatement(self, statement: str) -> QueryContent:
@@ -23,8 +33,7 @@ class WatcherController:
 
     def executeWatcherEvents(self):
         for event in self._checkWatchers():
-            print(
-                f"Watcher '{event.watcherName}' was triggered at {datetime.datetime.now()}")
+            self._eventDispatcher.dispatch(event)
 
     def _checkWatchers(self) -> [WatcherValueChangedEvent]:
         watcherEvents = []
@@ -37,11 +46,11 @@ class WatcherController:
         return watcher.checkWatchedValue(queryContent)
 
     def _openCursor(self) -> psycopg2.extensions.cursor:
-        cursor = self._dbConn.cursor()
+        cursor = self._database.cursor()
         return cursor
 
     def _commitTransactionAndCloseCursor(self, cursor: psycopg2.extensions.cursor):
-        self._dbConn.commit()
+        self._database.commit()
         cursor.close()
 
     def _initializeWatchers(self) -> [Watcher]:
