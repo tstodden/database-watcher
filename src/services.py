@@ -4,7 +4,7 @@ import datetime
 import logging
 
 from .core import Watcher, QueryContent, WatcherValueChangedEvent
-from .constants import *
+from .constants import HOST, DATABASE, USER, PASSWORD, WATCHER_CONFIG_FILEPATH
 
 
 class EventDispatcher:

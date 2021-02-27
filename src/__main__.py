@@ -13,7 +13,7 @@ def signal_handler(signal_received, frame):
 with ApplicationService() as service:
     # catch ctrl+c signal to exit
     signal.signal(signal.SIGINT, signal_handler)
-    
+
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 
     while True:
