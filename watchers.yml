@@ -1,5 +1,5 @@
-every_minute:
+- name: every_minute
   sql: SELECT date_trunc('minute', now());
 
-every_hour:
+- name: every_hour
   sql: SELECT date_trunc('hour', now());
